@@ -1,46 +1,41 @@
-# Actions on Google: Java client library boilerplate
+# Actions on Google: Transactions Sample using Java
 
-Boilerplate to help you get started quickly with the Java client library for Actions on Google.
+This sample shows everything you need to facilitate transactions for your app. It includes the main checkout flows, including checking for transaction requirements, getting the user's delivery address, and confirming the transaction. There is also an order update gradle task (sendOrderUpdate) that can be used to asynchronously update order status at any time.
 
-## Setup Instructions
+This sample provides examples of transaction payment configurations for action provided payments and transactions without payment, but the Actions on Google library also offers functionality for Google provided payment by providing tokenization parameters from your payment processor. There are comments in TransactionsApp.java demonstrating this behavior.
 
-### Action configuration
-1. Use the [Actions on Google Console](https://console.actions.google.com) to add a new project with a name of your choosing and click *Create Project*.
-1. Click *Skip*, located on the top right.
-1. On the left navigation menu under *BUILD*, click on *Actions*. Click on *Add Your First Action* and choose your app's language(s).
-1. Select *Custom intent*, click *BUILD*. This will open a Dialogflow console. Click *CREATE*.
-1. Click on the gear icon to see the project settings.
-1. Select *Export and Import*.
-1. Select *Restore from zip*. Follow the directions to restore from the `agent.zip` file in this repo.
-1. Deploy the fulfillment webhook as described in the *Webhook* section of this README.
-1. Go back to the Dialogflow console and select *Fulfillment* from the left navigation menu. Enable *Webhook*, set the value of *URL* to the webhook from the next section, then click *Save*.
+### Setup Instructions
+
+#### Action Configuration
+1. From the [Actions on Google Console](https://console.actions.google.com/), add a new project (this will become your *Project ID*) > **Create Project** > **Skip**.
+1. From the left navigation menu under **Build** > **Actions** > **Add Your First Action** > **BUILD** (this will bring you to the Dialogflow console) > Select language and time zone > **CREATE**.
+1. In Dialogflow, go to **Settings** ⚙ > **Export and Import** > **Restore from zip**.
+   + Follow the directions to restore from the `agent.zip` file in this repo.
 1. From the Dialogflow console, select Integrations from the left navigation menu and open the Integration Settings menu for Actions on Google. Click Manage Assistant App, which will take you to the Actions on Google Console.
-1. On the left navigation menu under DEPLOY, click on Directory Information.
+1. On the left navigation menu under **DEPLOY**, click on **Directory Information**.
 1. Add your App info, including images, a contact email and privacy policy. This information can all be edited before submitting for review.
 1. Check the box at the bottom to indicate this app uses Transactions under Additional Information. Click Save.
 1. Set up a payment method for your account in the Google Assistant settings on your phone if you haven't set one up already.
-1. Return [Actions on Google Console](https://console.actions.google.com), on the left navigation menu under *Test*, click on *Simulator*.
-1. Click *Start Testing* and select the latest version (VERSION - Draft).
-1. Type `Talk to my test app` in the simulator, or say `OK Google, talk to my test app` to any Actions on Google enabled device signed into your
-developer account.
-1. Follow the instructions in the *Test a transaction* section of this README to test a transaction.
-1. To test payment when confirming transaction, uncheck the box in the Actions
-console simulator indicating testing in Sandbox mode.
 
-### Webhook
-
+#### App Engine Deployment & Webhook Configuration
 When a new project is created using the Actions Console, it also creates a Google Cloud project in the background.
-Copy the name of this project from the Action Console project settings page.
 
-#### Build for Google Cloud Platform
-    1. Instructions for [Google Cloud App Engine Standard Environment](https://cloud.google.com/appengine/docs/standard/java/)
-    1. Use gcloud CLI to set the project to the name of your Actions project. Use 'gcloud init' to initialize and set your Google cloud project to the name of the Actions project.
-    1. Deploy to [App Engine using Gradle](https://cloud.google.com/appengine/docs/flexible/java/using-gradle) by running the following command: `gradle appengineDeploy`. You can do this directly from
-    IntelliJ by opening the Gradle tray and running the appEngineDeploy task. This will start the process to deploy the fulfillment code to Google Cloud App Engine.
+1. Download & install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/)
+1. Configure the gcloud CLI and set your Google Cloud project to the name of your Actions on Google Project ID, which you can find from the [Actions on Google console](https://console.actions.google.com/) under Settings ⚙
+   + `gcloud init`
+   + `gcloud auth application-default login`
+   + `gcloud components install app-engine-java`
+   + `gcloud components update`
+1. Deploy to [App Engine using Gradle](https://cloud.google.com/appengine/docs/flexible/java/using-gradle):
+   + `gradle appengineDeploy` OR
+   +  From within IntelliJ, open the Gradle tray and run the appEngineDeploy task.
+1. Back in the [Dialogflow console](https://console.dialogflow.com), from the left navigation menu under **Fulfillment** > **Enable Webhook**, set the value of **URL** to `https://<YOUR_PROJECT_ID>.appspot.com` > **Save**.
 
-    For more detailed information on deployment, see the [documentation](https://developers.google.com/actions/dialogflow/deploy-fulfillment).
+#### Testing this Sample
+1. In the [Dialogflow console](https://console.dialogflow.com), from the left navigation menu > **Integrations** > **Integration Settings** under Google Assistant > Enable **Auto-preview changes** >  **Test** to open the Actions on Google simulator.
+1. Type `Talk to my test app` in the simulator, or say `OK Google, talk to my test app` to Google Assistant on a mobile device associated with your Action's account.
 
-### Test a transaction
+##### Test a transaction
 
 1. Determine a unique Order ID for the transaction you want to test, and
 replace the `<UNIQUE_ORDER_ID>` string constant found in `TransactionsApp.java`. You may
@@ -61,7 +56,7 @@ an available delivery address.
 `transaction_decision_action` intent will be handled in `TransactionsApp.java`.
 6. You should see a transaction receipt, and a final confirmation of the order.
 
-### Test sending Order Updates
+##### Test sending Order Updates
 
 1. Visit the [Google Cloud console](https://console.cloud.google.com/) for the project used in the [Actions console](https://console.actions.google.com).
 1. Navigate to the [API Library](https://console.cloud.google.com/apis/library).
@@ -89,19 +84,19 @@ using the checkbox at the bottom of App Information
 each time you test the app.
 * The full transactions flow may only be testable on a phone.
 
-## References and How to report bugs
-* Actions on Google documentation: [https://developers.google.com/actions/](https://developers.google.com/actions/).
-* If you find any issues, please open a bug here on GitHub.
-* Questions are answered on [StackOverflow](https://stackoverflow.com/questions/tagged/actions-on-google).
+### References & Issues
++ Questions? Go to [StackOverflow](https://stackoverflow.com/questions/tagged/actions-on-google), [Actions on Google G+ Developer Community](https://g.co/actionsdev), or [Support](https://developers.google.com/actions/support/).
++ For bugs, please report an issue on Github.
++ For Actions on Google [documentation](https://developers.google.com/actions/).
++ For specifics about [Gradle & the App Engine Plugin](https://cloud.google.com/appengine/docs/flexible/java/using-gradle)
++ For details on deploying [Java apps with App Engine](https://cloud.google.com/appengine/docs/standard/java/quickstart)
 
-## How to make contributions?
+### Make Contributions
 Please read and follow the steps in the [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## License
+### License
 See [LICENSE](LICENSE).
 
-## Terms
+### Terms
 Your use of this sample is subject to, and by using or downloading the sample files you agree to comply with, the [Google APIs Terms of Service](https://developers.google.com/terms/).
 
-## Google+
-Actions on Google Developers Community on Google+ [https://g.co/actionsdev](https://g.co/actionsdev).

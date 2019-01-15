@@ -83,6 +83,58 @@ public class TransactionsApp extends DialogflowApp {
   private static final String UNIQUE_ORDER_ID = "<UNIQUE_ORDER_ID>";
   private static final String SERVICE_ACCOUNT_FILE = "service-account.json";
 
+  private static void sendOrderUpdate() throws IOException {
+    // Setup service account credentials
+    String serviceAccountFile = TransactionsApp.class.getClassLoader()
+        .getResource(SERVICE_ACCOUNT_FILE)
+        .getFile();
+    InputStream actionsApiServiceAccount = new FileInputStream(
+        serviceAccountFile);
+    ServiceAccountCredentials serviceAccountCredentials = (ServiceAccountCredentials)
+        ServiceAccountCredentials.fromStream(actionsApiServiceAccount)
+            .createScoped(Collections.singleton(
+                "https://www.googleapis.com/auth/actions.fulfillment.conversation"));
+    AccessToken token = serviceAccountCredentials.refreshAccessToken();
+
+    // Setup request with headers
+    HttpPost request = new HttpPost(
+        "https://actions.googleapis.com/v2/conversations:send");
+    request.setHeader("Content-type", "application/json");
+    request.setHeader("Authorization", "Bearer " + token.getTokenValue());
+
+    // Create order update
+    OrderUpdate orderUpdate = new OrderUpdate()
+        .setActionOrderId(UNIQUE_ORDER_ID)
+        .setOrderState(new OrderState()
+            .setLabel("Order has been delivered!")
+            .setState("FULFILLED"))
+        .setUpdateTime(Instant.now().toString());
+
+    // Setup JSON body containing order update
+    JsonParser parser = new JsonParser();
+    JsonObject orderUpdateElement =
+        parser.parse(new Gson().toJson(orderUpdate)).getAsJsonObject();
+    JsonObject orderUpdateJson = new JsonObject();
+    orderUpdateJson.add("order_update", orderUpdateElement);
+    JsonObject body = new JsonObject();
+    body.add("custom_push_message", orderUpdateJson);
+    body.addProperty("is_in_sandbox", true);
+    LOGGER.info("Full JSON: " + body.toString());
+    StringEntity entity = new StringEntity(body.toString());
+    entity.setContentType(ContentType.APPLICATION_JSON.getMimeType());
+    request.setEntity(entity);
+
+    // Make request
+    HttpClient httpClient = HttpClientBuilder.create().build();
+    HttpResponse response = httpClient.execute(request);
+    LOGGER.info(response.getStatusLine().getStatusCode() + " " + response
+        .getStatusLine().getReasonPhrase());
+  }
+
+  public static void main(String[] args) throws IOException {
+    sendOrderUpdate();
+  }
+
   // Starts the flow for a making a transaction using an action provided payment.
   @ForIntent("transaction_check_action")
   public ActionResponse transactionCheckAction(ActionRequest request) {
@@ -444,58 +496,6 @@ public class TransactionsApp extends DialogflowApp {
         .setPrice(taxPrice).setType("TAX");
 
     return Arrays.asList(subtotalItem, taxItem);
-  }
-
-  private static void sendOrderUpdate() throws IOException {
-    // Setup service account credentials
-    String serviceAccountFile = TransactionsApp.class.getClassLoader()
-        .getResource(SERVICE_ACCOUNT_FILE)
-        .getFile();
-    InputStream actionsApiServiceAccount = new FileInputStream(
-        serviceAccountFile);
-    ServiceAccountCredentials serviceAccountCredentials = (ServiceAccountCredentials)
-        ServiceAccountCredentials.fromStream(actionsApiServiceAccount)
-            .createScoped(Collections.singleton(
-                "https://www.googleapis.com/auth/actions.fulfillment.conversation"));
-    AccessToken token = serviceAccountCredentials.refreshAccessToken();
-
-    // Setup request with headers
-    HttpPost request = new HttpPost(
-        "https://actions.googleapis.com/v2/conversations:send");
-    request.setHeader("Content-type", "application/json");
-    request.setHeader("Authorization", "Bearer " + token.getTokenValue());
-
-    // Create order update
-    OrderUpdate orderUpdate = new OrderUpdate()
-        .setActionOrderId(UNIQUE_ORDER_ID)
-        .setOrderState(new OrderState()
-            .setLabel("Order has been delivered!")
-            .setState("FULFILLED"))
-        .setUpdateTime(Instant.now().toString());
-
-    // Setup JSON body containing order update
-    JsonParser parser = new JsonParser();
-    JsonObject orderUpdateElement =
-        parser.parse(new Gson().toJson(orderUpdate)).getAsJsonObject();
-    JsonObject orderUpdateJson = new JsonObject();
-    orderUpdateJson.add("order_update", orderUpdateElement);
-    JsonObject body = new JsonObject();
-    body.add("custom_push_message", orderUpdateJson);
-    body.addProperty("is_in_sandbox", true);
-    LOGGER.info("Full JSON: " + body.toString());
-    StringEntity entity = new StringEntity(body.toString());
-    entity.setContentType(ContentType.APPLICATION_JSON.getMimeType());
-    request.setEntity(entity);
-
-    // Make request
-    HttpClient httpClient = HttpClientBuilder.create().build();
-    HttpResponse response = httpClient.execute(request);
-    LOGGER.info(response.getStatusLine().getStatusCode() + " " + response
-        .getStatusLine().getReasonPhrase());
-  }
-
-  public static void main(String[] args) throws IOException {
-    sendOrderUpdate();
   }
 }
 

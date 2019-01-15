@@ -31,22 +31,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Handles request received via HTTP POST and delegates it to your Actions app. See: [Request
- * handling in Google App
- * Engine](https://cloud.google.com/appengine/docs/standard/java/how-requests-are-handled).
+ * Handles request received via HTTP POST and delegates it to your Actions app.
+ * See: [Request handling in Google App Engine](https://cloud.google.com/appengine/docs/standard/java/how-requests-are-handled).
  */
 @WebServlet(name = "actions", value = "/")
 public class ActionsServlet extends HttpServlet {
-  private static final Logger LOG = LoggerFactory.getLogger(ActionsServlet.class);
+
+  private static final Logger LOG = LoggerFactory
+      .getLogger(ActionsServlet.class);
   private final App actionsApp = new TransactionsApp();
 
   @Override
-  protected void doPost(HttpServletRequest req, HttpServletResponse res) throws IOException {
+  protected void doPost(HttpServletRequest req, HttpServletResponse res)
+      throws IOException {
     String body = req.getReader().lines().collect(Collectors.joining());
     LOG.info("doPost, body = {}", body);
 
     try {
-      String jsonResponse = actionsApp.handleRequest(body, getHeadersMap(req)).get();
+      String jsonResponse = actionsApp.handleRequest(body, getHeadersMap(req))
+          .get();
       LOG.info("Generated json = {}", jsonResponse);
       res.setContentType("application/json");
       writeResponse(res, jsonResponse);
@@ -79,7 +82,8 @@ public class ActionsServlet extends HttpServlet {
     try {
       throwable.printStackTrace();
       LOG.error("Error in App.handleRequest ", throwable);
-      res.getWriter().write("Error handling the intent - " + throwable.getMessage());
+      res.getWriter()
+          .write("Error handling the intent - " + throwable.getMessage());
     } catch (IOException e) {
       e.printStackTrace();
     }
