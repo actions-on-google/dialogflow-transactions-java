@@ -2,7 +2,7 @@
 
 This sample shows everything you need to facilitate transactions for your app. It includes the main checkout flows, including checking for transaction requirements, getting the user's delivery address, and confirming the transaction. There is also an order update gradle task (sendOrderUpdate) that can be used to asynchronously update order status at any time.
 
-This sample provides examples of transaction payment configurations for action provided payments and transactions without payment, but the Actions on Google library also offers functionality for Google provided payment by providing tokenization parameters from your payment processor. There are comments in TransactionsApp.java demonstrating this behavior.
+This sample provides examples of transaction payment configurations for action provided payments, but the Actions on Google library also offers functionality for Google provided payment by providing tokenization parameters from your payment processor. There are comments in TransactionsApp.java demonstrating this behavior.
 
 ### Setup Instructions
 
