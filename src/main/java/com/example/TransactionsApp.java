@@ -58,6 +58,7 @@ import com.google.gson.JsonParser;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.MessageFormat;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
@@ -65,22 +66,31 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
-import java.util.logging.Logger;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.Random;
 
-/**
- * AoG Transactions code sample for the Java client lib
- */
 public class TransactionsApp extends DialogflowApp {
 
-  private static final Logger LOGGER = Logger
-      .getLogger(TransactionsApp.class.getName());
-  private static final String UNIQUE_ORDER_ID = "<UNIQUE_ORDER_ID>";
+  private static final Logger LOGGER = LoggerFactory.getLogger(TransactionsApp.class.getName());
+
+  public String validOrderIdChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+
+  public static String generateRandomOrderId(String validOrderIdChars, int length) {
+    StringBuilder sb = new StringBuilder();
+    Random random = new Random();
+    for (int i = 0; i < length; i++) {
+      sb.append(validOrderIdChars.charAt(random.nextInt(validOrderIdChars.length())));
+    }
+    return sb.toString();
+  }
+
   private static final String SERVICE_ACCOUNT_FILE = "service-account.json";
 
   private static void sendOrderUpdate() throws IOException {
@@ -104,7 +114,8 @@ public class TransactionsApp extends DialogflowApp {
 
     // Create order update
     OrderUpdate orderUpdate = new OrderUpdate()
-        .setActionOrderId(UNIQUE_ORDER_ID)
+        // Replace with the order id you want to update
+        .setActionOrderId("<finalOrderId>")
         .setOrderState(new OrderState()
             .setLabel("Order has been delivered!")
             .setState("FULFILLED"))
@@ -135,10 +146,20 @@ public class TransactionsApp extends DialogflowApp {
     sendOrderUpdate();
   }
 
+  @ForIntent("Default Welcome Intent")
+  public ActionResponse welcome(ActionRequest request) {
+    ResourceBundle rb = ResourceBundle.getBundle("resources", request.getLocale());
+
+    return getResponseBuilder(request)
+        .add(rb.getString("welcome"))
+        .addSuggestions(new String[]{"Merchant Transaction", "Google Pay Transaction"})
+        .build();
+  }
+
   // Starts the flow for a making a transaction using an action provided payment.
-  @ForIntent("transaction_check_action")
+  @ForIntent("transaction_check_merchant")
   public ActionResponse transactionCheckAction(ActionRequest request) {
-    LOGGER.info("transaction_check_action start");
+    LOGGER.info("transaction_check_merchant start");
 
     // Create order options
     OrderOptions orderOptions = new OrderOptions()
@@ -152,7 +173,7 @@ public class TransactionsApp extends DialogflowApp {
         .setActionProvidedOptions(actionProvidedPaymentOptions);
 
     // Send TransactionRequirements
-    LOGGER.info("transaction_check_action end");
+    LOGGER.info("transaction_check_merchant end");
     return getResponseBuilder(request)
         .add("Placeholder for transaction requirements text")
         .add(new TransactionRequirements().setOrderOptions(orderOptions)
@@ -222,7 +243,8 @@ public class TransactionsApp extends DialogflowApp {
     ResponseBuilder responseBuilder = getResponseBuilder(request);
     if (result) {
       responseBuilder
-          .add(rb.getString("get_delivery_address"));
+          .add(rb.getString("get_delivery_address"))
+          .addSuggestions(new String[]{"Get Delivery Address"});
     } else {
       responseBuilder.add(rb.getString("transaction_failed"));
     }
@@ -278,7 +300,8 @@ public class TransactionsApp extends DialogflowApp {
       conversationData.put("postalAddress",
           new Gson().toJson(deliveryAddress.getPostalAddress()));
       responseBuilder
-          .add(rb.getString("confirm_transaction"));
+          .add(rb.getString("confirm_transaction"))
+          .addSuggestions(new String[]{"Confirm Transaction"});
     } else {
       responseBuilder.add(rb.getString("delivery_address_failed"));
     }
@@ -287,9 +310,9 @@ public class TransactionsApp extends DialogflowApp {
   }
 
   // Sends a transaction decision with the proposed order
-  @ForIntent("transaction_decision_action")
+  @ForIntent("transaction_decision_merchant")
   public ActionResponse transactionDecisionAction(ActionRequest request) {
-    LOGGER.info("transaction_decision_action start");
+    LOGGER.info("transaction_decision_merchant start");
 
     // Create proposed order with cart
     Merchant merchant = new Merchant().setId("book_store_1")
@@ -302,15 +325,17 @@ public class TransactionsApp extends DialogflowApp {
     Money totalAmount = new Money().setCurrencyCode("USD").setNanos(0)
         .setUnits(35L);
     Price totalPrice = new Price().setAmount(totalAmount).setType("ESTIMATE");
-    ProposedOrder proposedOrder = new ProposedOrder().setId(UNIQUE_ORDER_ID)
-        .setCart(cart).setTotalPrice(totalPrice);
 
-    // Check context to see if transaction with
-    // action payment or google payment.
+    ProposedOrder proposedOrder = new ProposedOrder()
+        .setId(generateRandomOrderId(validOrderIdChars, 6))
+        .setCart(cart)
+        .setTotalPrice(totalPrice);
+
+    // Check the context to see if transaction is merchant-managed or Google Pay
     OrderOptions orderOptions;
     PaymentOptions paymentOptions;
-    if (request.getContext("action_payment") != null) {
-      // Setup action provided payment options
+    if (request.getContext("merchant_payment") != null) {
+      // Setup merchant-managed provided payment option
       orderOptions = new OrderOptions().setRequestDeliveryAddress(true);
       ActionProvidedPaymentOptions actionProvidedPaymentOptions =
           new ActionProvidedPaymentOptions()
@@ -319,7 +344,7 @@ public class TransactionsApp extends DialogflowApp {
       paymentOptions = new PaymentOptions()
           .setActionProvidedOptions(actionProvidedPaymentOptions);
     } else {
-      // Setup Google provided payment options
+      // Google Pay provided payment gateway option
       Map<String, String> parameters = new HashMap<>();
       parameters.put("gateway", "braintree");
       parameters.put("braintree:sdkVersion", "1.4.0");
@@ -356,7 +381,7 @@ public class TransactionsApp extends DialogflowApp {
                 .setLocation(new Location().setPostalAddress(postalAddress))));
     proposedOrder.setExtension(extension);
 
-    LOGGER.info("transaction_decision_action end");
+    LOGGER.info("transaction_decision_merchant end");
     return getResponseBuilder(request)
         .add("Placeholder for transaction decision text")
         .add(new TransactionDecision()
@@ -380,6 +405,7 @@ public class TransactionsApp extends DialogflowApp {
     if (transactionDecisionValue != null) {
       extension = transactionDecisionValue.getExtension();
     }
+
     String userDecision = null;
     if (extension != null) {
       userDecision = (String) extension.get("userDecision");
@@ -389,10 +415,11 @@ public class TransactionsApp extends DialogflowApp {
       // If the order is accepted, send an order update to create order
       String finalOrderId = ((Order) extension.get("order")).getFinalOrder()
           .getId();
+      LOGGER.info("Order accepted! finalOrderId: {}", finalOrderId);
+
       OrderUpdate orderUpdate = new OrderUpdate().setActionOrderId(finalOrderId)
-          .setOrderState(
-              new OrderState().setLabel("Order created").setState("CREATED"))
-          .setReceipt(new Receipt().setConfirmedActionOrderId(UNIQUE_ORDER_ID))
+          .setOrderState(new OrderState().setLabel("Order created").setState("CREATED"))
+          .setReceipt(new Receipt().setConfirmedActionOrderId(finalOrderId))
           .setOrderManagementActions(
               Collections.singletonList(new OrderUpdateAction()
                   .setButton(new Button().setOpenUrlAction(new OpenUrlAction()
@@ -402,8 +429,10 @@ public class TransactionsApp extends DialogflowApp {
           .setUserNotification(new OrderUpdateUserNotification()
               .setText("Notification text.").setTitle("Notification Title"))
           .setUpdateTime(Instant.now().toString());
-      responseBuilder.add(rb.getString("transaction_completed"))
-          .add(new StructuredResponse().setOrderUpdate(orderUpdate));
+
+      String response = MessageFormat.format(rb.getString("transaction_completed"), finalOrderId);
+
+      responseBuilder.add(response).add(new StructuredResponse().setOrderUpdate(orderUpdate));
     } else if (userDecision != null && userDecision
         .equals("DELIVERY_ADDRESS_UPDATED")) {
       responseBuilder.add(new DeliveryAddress().setAddressOptions(
@@ -498,4 +527,3 @@ public class TransactionsApp extends DialogflowApp {
     return Arrays.asList(subtotalItem, taxItem);
   }
 }
-
