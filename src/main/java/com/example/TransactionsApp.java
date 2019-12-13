@@ -22,39 +22,45 @@ import com.google.actions.api.DialogflowApp;
 import com.google.actions.api.ForIntent;
 import com.google.actions.api.response.ResponseBuilder;
 import com.google.actions.api.response.helperintent.DeliveryAddress;
-import com.google.actions.api.response.helperintent.TransactionDecision;
-import com.google.actions.api.response.helperintent.TransactionRequirements;
-import com.google.api.services.actions_fulfillment.v2.model.ActionProvidedPaymentOptions;
+import com.google.actions.api.response.helperintent.transactions.v3.TransactionDecision;
+import com.google.actions.api.response.helperintent.transactions.v3.TransactionRequirements;
+import com.google.api.services.actions_fulfillment.v2.model.Action;
 import com.google.api.services.actions_fulfillment.v2.model.Argument;
-import com.google.api.services.actions_fulfillment.v2.model.Button;
-import com.google.api.services.actions_fulfillment.v2.model.Cart;
 import com.google.api.services.actions_fulfillment.v2.model.DeliveryAddressValueSpecAddressOptions;
-import com.google.api.services.actions_fulfillment.v2.model.GoogleProvidedPaymentOptions;
-import com.google.api.services.actions_fulfillment.v2.model.LineItem;
-import com.google.api.services.actions_fulfillment.v2.model.LineItemSubLine;
+import com.google.api.services.actions_fulfillment.v2.model.GooglePaymentOption;
+import com.google.api.services.actions_fulfillment.v2.model.LineItemV3;
 import com.google.api.services.actions_fulfillment.v2.model.Location;
-import com.google.api.services.actions_fulfillment.v2.model.Merchant;
-import com.google.api.services.actions_fulfillment.v2.model.Money;
+import com.google.api.services.actions_fulfillment.v2.model.MerchantPaymentMethod;
+import com.google.api.services.actions_fulfillment.v2.model.MerchantPaymentOption;
+import com.google.api.services.actions_fulfillment.v2.model.MerchantV3;
+import com.google.api.services.actions_fulfillment.v2.model.MoneyV3;
 import com.google.api.services.actions_fulfillment.v2.model.OpenUrlAction;
-import com.google.api.services.actions_fulfillment.v2.model.Order;
-import com.google.api.services.actions_fulfillment.v2.model.OrderLocation;
-import com.google.api.services.actions_fulfillment.v2.model.OrderOptions;
-import com.google.api.services.actions_fulfillment.v2.model.OrderState;
-import com.google.api.services.actions_fulfillment.v2.model.OrderUpdate;
-import com.google.api.services.actions_fulfillment.v2.model.OrderUpdateAction;
-import com.google.api.services.actions_fulfillment.v2.model.OrderUpdateUserNotification;
-import com.google.api.services.actions_fulfillment.v2.model.PaymentMethodTokenizationParameters;
-import com.google.api.services.actions_fulfillment.v2.model.PaymentOptions;
-import com.google.api.services.actions_fulfillment.v2.model.PostalAddress;
-import com.google.api.services.actions_fulfillment.v2.model.Price;
-import com.google.api.services.actions_fulfillment.v2.model.ProposedOrder;
-import com.google.api.services.actions_fulfillment.v2.model.Receipt;
+import com.google.api.services.actions_fulfillment.v2.model.OrderContents;
+import com.google.api.services.actions_fulfillment.v2.model.OrderOptionsV3;
+import com.google.api.services.actions_fulfillment.v2.model.OrderUpdateV3;
+import com.google.api.services.actions_fulfillment.v2.model.OrderV3;
+import com.google.api.services.actions_fulfillment.v2.model.PaymentMethodDisplayInfo;
+import com.google.api.services.actions_fulfillment.v2.model.PaymentMethodStatus;
+import com.google.api.services.actions_fulfillment.v2.model.PaymentParameters;
+import com.google.api.services.actions_fulfillment.v2.model.PresentationOptionsV3;
+import com.google.api.services.actions_fulfillment.v2.model.PriceAttribute;
+import com.google.api.services.actions_fulfillment.v2.model.PurchaseFulfillmentInfo;
+import com.google.api.services.actions_fulfillment.v2.model.PurchaseItemExtension;
+import com.google.api.services.actions_fulfillment.v2.model.PurchaseItemExtensionItemOption;
+import com.google.api.services.actions_fulfillment.v2.model.PurchaseOrderExtension;
+import com.google.api.services.actions_fulfillment.v2.model.PurchaseReturnsInfo;
 import com.google.api.services.actions_fulfillment.v2.model.StructuredResponse;
+import com.google.api.services.actions_fulfillment.v2.model.TimeV3;
+import com.google.api.services.actions_fulfillment.v2.model.UserInfo;
+import com.google.api.services.actions_fulfillment.v2.model.UserInfoOptions;
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.protobuf.FieldMask;
+import com.google.protobuf.util.FieldMaskUtil;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -62,16 +68,16 @@ import java.text.MessageFormat;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPatch;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.Random;
@@ -80,57 +86,71 @@ public class TransactionsApp extends DialogflowApp {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(TransactionsApp.class.getName());
 
-  public String validOrderIdChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+  private static final GsonBuilder GSON_BUILDER;
+  private static final LocationDeserializer LOCATION_DESERIALIZER;
+  static {
+    LOCATION_DESERIALIZER = new LocationDeserializer();
+    GSON_BUILDER = new GsonBuilder();
+    GSON_BUILDER.registerTypeAdapter(Location.class, LOCATION_DESERIALIZER);
+  }
 
-  public static String generateRandomOrderId(String validOrderIdChars, int length) {
+  private static String generateRandomOrderId() {
     StringBuilder sb = new StringBuilder();
     Random random = new Random();
-    for (int i = 0; i < length; i++) {
-      sb.append(validOrderIdChars.charAt(random.nextInt(validOrderIdChars.length())));
+    String validCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+    for (int i = 0; i < 6; i++) {
+      sb.append(validCharacters.charAt(random.nextInt(validCharacters.length())));
     }
     return sb.toString();
   }
 
-  private static final String SERVICE_ACCOUNT_FILE = "service-account.json";
-
-  private static void sendOrderUpdate() throws IOException {
+  private static void sendOrderUpdate(String orderId) throws IOException {
+    // Setup service account credentials
+    String serviceAccountKeyFileName = "service-account.json";
     // Setup service account credentials
     String serviceAccountFile = TransactionsApp.class.getClassLoader()
-        .getResource(SERVICE_ACCOUNT_FILE)
+        .getResource(serviceAccountKeyFileName)
         .getFile();
     InputStream actionsApiServiceAccount = new FileInputStream(
         serviceAccountFile);
     ServiceAccountCredentials serviceAccountCredentials = (ServiceAccountCredentials)
         ServiceAccountCredentials.fromStream(actionsApiServiceAccount)
             .createScoped(Collections.singleton(
-                "https://www.googleapis.com/auth/actions.fulfillment.conversation"));
+                "https://www.googleapis.com/auth/actions.order.developer"));
     AccessToken token = serviceAccountCredentials.refreshAccessToken();
 
     // Setup request with headers
-    HttpPost request = new HttpPost(
-        "https://actions.googleapis.com/v2/conversations:send");
+    HttpPatch request = new HttpPatch(
+        "https://actions.googleapis.com/v3/orders/" + orderId);
     request.setHeader("Content-type", "application/json");
     request.setHeader("Authorization", "Bearer " + token.getTokenValue());
 
     // Create order update
-    OrderUpdate orderUpdate = new OrderUpdate()
-        // Replace with the order id you want to update
-        .setActionOrderId("<finalOrderId>")
-        .setOrderState(new OrderState()
-            .setLabel("Order has been delivered!")
-            .setState("FULFILLED"))
-        .setUpdateTime(Instant.now().toString());
+    FieldMask fieldMask = FieldMask.newBuilder().addAllPaths(Arrays.asList(
+        "lastUpdateTime",
+        "purchase.status",
+        "purchase.userVisibleStatusLabel"))
+        .build();
+
+    OrderUpdateV3 orderUpdate = new OrderUpdateV3()
+        .setOrder(new OrderV3()
+            .setMerchantOrderId(orderId)
+            .setLastUpdateTime(Instant.now().toString())
+            .setPurchase(new PurchaseOrderExtension()
+                .setStatus("DELIVERED")
+                .setUserVisibleStatusLabel("Order delivered.")))
+        .setUpdateMask(FieldMaskUtil.toString(fieldMask))
+        .setReason("Order status was updated to delivered.");
 
     // Setup JSON body containing order update
     JsonParser parser = new JsonParser();
-    JsonObject orderUpdateElement =
+    JsonObject orderUpdateJson =
         parser.parse(new Gson().toJson(orderUpdate)).getAsJsonObject();
-    JsonObject orderUpdateJson = new JsonObject();
-    orderUpdateJson.add("order_update", orderUpdateElement);
     JsonObject body = new JsonObject();
-    body.add("custom_push_message", orderUpdateJson);
-    body.addProperty("is_in_sandbox", true);
-    LOGGER.info("Full JSON: " + body.toString());
+    body.add("orderUpdate", orderUpdateJson);
+    JsonObject header = new JsonObject();
+    header.addProperty("isInSandbox", true);
+    body.add("header", header);
     StringEntity entity = new StringEntity(body.toString());
     entity.setContentType(ContentType.APPLICATION_JSON.getMimeType());
     request.setEntity(entity);
@@ -143,88 +163,42 @@ public class TransactionsApp extends DialogflowApp {
   }
 
   public static void main(String[] args) throws IOException {
-    sendOrderUpdate();
+    String uniqueOrderId = "<UNIQUE_ORDER_ID>";
+    sendOrderUpdate(uniqueOrderId);
   }
 
   @ForIntent("Default Welcome Intent")
   public ActionResponse welcome(ActionRequest request) {
     ResourceBundle rb = ResourceBundle.getBundle("resources", request.getLocale());
-
     return getResponseBuilder(request)
         .add(rb.getString("welcome"))
         .addSuggestions(new String[]{"Merchant Transaction", "Google Pay Transaction"})
         .build();
   }
 
-  // Starts the flow for a making a transaction using an action provided payment.
-  @ForIntent("transaction_check_merchant")
-  public ActionResponse transactionCheckAction(ActionRequest request) {
-    LOGGER.info("transaction_check_merchant start");
-
-    // Create order options
-    OrderOptions orderOptions = new OrderOptions()
-        .setRequestDeliveryAddress(false);
-
-    // Create payment options
-    ActionProvidedPaymentOptions actionProvidedPaymentOptions =
-        new ActionProvidedPaymentOptions().setDisplayName("VISA-1234")
-            .setPaymentType("PAYMENT_CARD");
-    PaymentOptions paymentOptions = new PaymentOptions()
-        .setActionProvidedOptions(actionProvidedPaymentOptions);
-
-    // Send TransactionRequirements
-    LOGGER.info("transaction_check_merchant end");
+  // Check transaction requirements for Merchant payment
+  @ForIntent("Transaction Merchant")
+  public ActionResponse transactionRequirementsMerchant(ActionRequest request) {
+    LOGGER.info("Checking Transaction Requirements for merchant payment.");
     return getResponseBuilder(request)
-        .add("Placeholder for transaction requirements text")
-        .add(new TransactionRequirements().setOrderOptions(orderOptions)
-            .setPaymentOptions(paymentOptions))
+        .add(new TransactionRequirements())
         .build();
   }
 
-  // Starts the flow for a making a transaction using a google provided payment.
-  @ForIntent("transaction_check_google")
-  public ActionResponse transactionCheckGoogle(ActionRequest request) {
-    LOGGER.info("transaction_check_google start");
-
-    // Create order options
-    OrderOptions orderOptions = new OrderOptions()
-        .setRequestDeliveryAddress(false);
-
-    // Create payment options
-    Map<String, String> parameters = new HashMap<>();
-    parameters.put("gateway", "braintree");
-    parameters.put("braintree:sdkVersion", "1.4.0");
-    parameters.put("braintree:apiVersion", "v1");
-    parameters.put("braintree:merchantId", "xxxxxxxxxxx");
-    parameters.put("braintree:clientKey", "sandbox_xxxxxxxxxxxxxxx");
-    parameters
-        .put("braintree:authorizationFingerprint", "sandbox_xxxxxxxxxxxxxxx");
-    PaymentMethodTokenizationParameters tokenizationParameters =
-        new PaymentMethodTokenizationParameters()
-            .setTokenizationType("PAYMENT_GATEWAY")
-            .setParameters(parameters);
-    GoogleProvidedPaymentOptions googleProvidedPaymentOptions =
-        new GoogleProvidedPaymentOptions()
-            .setPrepaidCardDisallowed(false)
-            .setSupportedCardNetworks(Arrays.asList("VISA", "AMEX"))
-            .setTokenizationParameters(tokenizationParameters);
-    PaymentOptions paymentOptions = new PaymentOptions()
-        .setGoogleProvidedOptions(googleProvidedPaymentOptions);
-
-    // Send TransactionRequirements
-    LOGGER.info("transaction_check_google end");
-    return getResponseBuilder(request)
-        .add("Placeholder for transaction requirements text")
-        .add(new TransactionRequirements()
-            .setOrderOptions(orderOptions)
-            .setPaymentOptions(paymentOptions))
-        .build();
+  // Check transaction requirements for Google payment
+  @ForIntent("Transaction Google")
+  public ActionResponse transactionRequirementsGoogle(ActionRequest request) {
+      LOGGER.info("Checking Transaction Requirements for google payment.");
+      return getResponseBuilder(request)
+          .add(new TransactionRequirements())
+          .build();
   }
 
-  // Verifies the transaction requirements check result
-  @ForIntent("transaction_check_complete")
+  // Check result of transaction requirements
+  @ForIntent("Transaction Check Complete")
   public ActionResponse transactionCheckComplete(ActionRequest request) {
-    LOGGER.info("transaction_check_complete start");
+    LOGGER.info("Checking Transaction Requirements Result.");
+
     ResourceBundle rb = ResourceBundle
         .getBundle("resources", request.getLocale());
 
@@ -236,7 +210,7 @@ public class TransactionsApp extends DialogflowApp {
       Map<String, Object> map = transactionCheckResult.getExtension();
       if (map != null) {
         String resultType = (String) map.get("resultType");
-        result = resultType != null && resultType.equals("OK");
+        result = resultType != null && resultType.equals("CAN_TRANSACT");
       }
     }
 
@@ -244,18 +218,16 @@ public class TransactionsApp extends DialogflowApp {
     if (result) {
       responseBuilder
           .add(rb.getString("get_delivery_address"))
-          .addSuggestions(new String[]{"Get Delivery Address"});
+          .addSuggestions(new String[]{"get delivery address"});
     } else {
       responseBuilder.add(rb.getString("transaction_failed"));
     }
-    LOGGER.info("transaction_check_complete end");
     return responseBuilder.build();
   }
 
   // Asks for a delivery address to associate with the transaction
-  @ForIntent("delivery_address")
+  @ForIntent("Delivery Address")
   public ActionResponse deliveryAddress(ActionRequest request) {
-    LOGGER.info("delivery_address start");
     ResourceBundle rb = ResourceBundle
         .getBundle("resources", request.getLocale());
 
@@ -263,7 +235,6 @@ public class TransactionsApp extends DialogflowApp {
     DeliveryAddressValueSpecAddressOptions addressOptions =
         new DeliveryAddressValueSpecAddressOptions()
             .setReason(rb.getString("reason"));
-    LOGGER.info("delivery_address end");
 
     return getResponseBuilder(request)
         .add("Placeholder for delivery address text")
@@ -272,9 +243,8 @@ public class TransactionsApp extends DialogflowApp {
   }
 
   // Verifies delivery address and caches it for later use
-  @ForIntent("delivery_address_complete")
+  @ForIntent("Delivery Address Complete")
   public ActionResponse deliveryAddressComplete(ActionRequest request) {
-    LOGGER.info("delivery_address_complete start");
     ResourceBundle rb = ResourceBundle
         .getBundle("resources", request.getLocale());
 
@@ -297,106 +267,374 @@ public class TransactionsApp extends DialogflowApp {
     if (deliveryAddress != null) {
       // Cache delivery address in conversation data for later use
       Map<String, Object> conversationData = request.getConversationData();
-      conversationData.put("postalAddress",
-          new Gson().toJson(deliveryAddress.getPostalAddress()));
+      conversationData.put("location",
+          GSON_BUILDER.create().toJson(deliveryAddress, Location.class));
       responseBuilder
           .add(rb.getString("confirm_transaction"))
-          .addSuggestions(new String[]{"Confirm Transaction"});
+          .addSuggestions(new String[]{"confirm transaction"});
     } else {
       responseBuilder.add(rb.getString("delivery_address_failed"));
     }
-    LOGGER.info("delivery_address_complete end");
     return responseBuilder.build();
   }
 
-  // Sends a transaction decision with the proposed order
-  @ForIntent("transaction_decision_merchant")
-  public ActionResponse transactionDecisionAction(ActionRequest request) {
-    LOGGER.info("transaction_decision_merchant start");
+  @ForIntent("Transaction Decision")
+  public ActionResponse transactionDecision(ActionRequest request) {
+    LOGGER.info("Checking Transaction Decision.");
 
-    // Create proposed order with cart
-    Merchant merchant = new Merchant().setId("book_store_1")
-        .setName("Book Store");
-    Cart cart = new Cart()
-        .setMerchant(merchant)
-        .setNotes("The Memoir collection")
-        .setLineItems(getLineItems())
-        .setOtherItems(getOtherItems());
-    Money totalAmount = new Money().setCurrencyCode("USD").setNanos(0)
-        .setUnits(35L);
-    Price totalPrice = new Price().setAmount(totalAmount).setType("ESTIMATE");
+    Map<String, Object> conversationData = request.getConversationData();
+    String orderId = generateRandomOrderId();
+    conversationData.put("UNIQUE_ORDER_ID", orderId);
 
-    ProposedOrder proposedOrder = new ProposedOrder()
-        .setId(generateRandomOrderId(validOrderIdChars, 6))
-        .setCart(cart)
-        .setTotalPrice(totalPrice);
+    // Build the Order
 
-    // Check the context to see if transaction is merchant-managed or Google Pay
-    OrderOptions orderOptions;
-    PaymentOptions paymentOptions;
-    if (request.getContext("merchant_payment") != null) {
-      // Setup merchant-managed provided payment option
-      orderOptions = new OrderOptions().setRequestDeliveryAddress(true);
-      ActionProvidedPaymentOptions actionProvidedPaymentOptions =
-          new ActionProvidedPaymentOptions()
-              .setPaymentType("PAYMENT_CARD")
-              .setDisplayName("VISA-1234");
-      paymentOptions = new PaymentOptions()
-          .setActionProvidedOptions(actionProvidedPaymentOptions);
+    // Transaction Merchant
+    MerchantV3 transactionMerchant = new MerchantV3()
+        .setId("http://www.example.com")
+        .setName("Example Merchant");
+
+    // Line Items
+    LineItemV3 firstItem = new LineItemV3()
+        .setId("memoirs_1")
+        .setName("My Memoirs")
+        .setPriceAttributes(Arrays.asList(
+            new PriceAttribute()
+                .setType("REGULAR")
+                .setName("Item Price")
+                .setState("ACTUAL")
+                .setAmount(new MoneyV3()
+                    .setCurrencyCode("USD")
+                    .setAmountInMicros(3990000L))
+                .setTaxIncluded(true),
+            new PriceAttribute()
+                .setType("TOTAL")
+                .setName("Total Price")
+                .setState("ACTUAL")
+                .setAmount(new MoneyV3()
+                    .setCurrencyCode("USD")
+                    .setAmountInMicros(3990000L))
+                .setTaxIncluded(true)))
+        .setNotes(Collections.singletonList("Note from the author."))
+        .setPurchase(new PurchaseItemExtension()
+            .setQuantity(1));
+
+    LineItemV3 secondItem = new LineItemV3()
+        .setId("memoirs_2")
+        .setName("Memoirs of a person")
+        .setPriceAttributes(Arrays.asList(
+            new PriceAttribute()
+                .setType("REGULAR")
+                .setName("Item Price")
+                .setState("ACTUAL")
+                .setAmount(new MoneyV3()
+                    .setCurrencyCode("USD")
+                    .setAmountInMicros(5990000L))
+                .setTaxIncluded(true),
+            new PriceAttribute()
+                .setType("TOTAL")
+                .setName("Total Price")
+                .setState("ACTUAL")
+                .setAmount(new MoneyV3()
+                    .setCurrencyCode("USD")
+                    .setAmountInMicros(5990000L))
+                .setTaxIncluded(true)))
+        .setNotes(Collections.singletonList("Special introduction by author."))
+        .setPurchase(new PurchaseItemExtension()
+            .setQuantity(1));
+
+    LineItemV3 thirdItem = new LineItemV3()
+        .setId("memoirs_3")
+        .setName("Their memoirs")
+        .setPriceAttributes(Arrays.asList(
+            new PriceAttribute()
+                .setType("REGULAR")
+                .setName("Item Price")
+                .setState("ACTUAL")
+                .setAmount(new MoneyV3()
+                    .setCurrencyCode("USD")
+                    .setAmountInMicros(15750000L))
+                .setTaxIncluded(true),
+            new PriceAttribute()
+                .setType("TOTAL")
+                .setName("Total Price")
+                .setState("ACTUAL")
+                .setAmount(new MoneyV3()
+                    .setCurrencyCode("USD")
+                    .setAmountInMicros(15750000L))
+                .setTaxIncluded(true)))
+        .setPurchase(new PurchaseItemExtension()
+            .setQuantity(1)
+            .setItemOptions(Collections.singletonList(
+                new PurchaseItemExtensionItemOption()
+                    .setId("memoirs_epilogue")
+                    .setName("Special memoir epilogue")
+                    .setPrices(Arrays.asList(
+                        new PriceAttribute()
+                            .setType("REGULAR")
+                            .setName("Item Price")
+                            .setState("ACTUAL")
+                            .setAmount(new MoneyV3()
+                                .setCurrencyCode("USD")
+                                .setAmountInMicros(3990000L))
+                            .setTaxIncluded(true),
+                        new PriceAttribute()
+                            .setType("TOTAL")
+                            .setName("Total Price")
+                            .setState("ACTUAL")
+                            .setAmount(new MoneyV3()
+                                .setCurrencyCode("USD")
+                                .setAmountInMicros(3990000L))
+                            .setTaxIncluded(true))))));
+
+    LineItemV3 fourthItem = new LineItemV3()
+        .setId("memoirs_4")
+        .setName("Our memoirs")
+        .setPriceAttributes(Arrays.asList(
+            new PriceAttribute()
+                .setType("REGULAR")
+                .setName("Item Price")
+                .setState("ACTUAL")
+                .setAmount(new MoneyV3()
+                    .setCurrencyCode("USD")
+                    .setAmountInMicros(6490000L))
+                .setTaxIncluded(true),
+            new PriceAttribute()
+                .setType("TOTAL")
+                .setName("Total Price")
+                .setState("ACTUAL")
+                .setAmount(new MoneyV3()
+                    .setCurrencyCode("USD")
+                    .setAmountInMicros(6490000L))
+                .setTaxIncluded(true)))
+        .setNotes(Collections.singletonList("Special introduction by author."))
+        .setPurchase(new PurchaseItemExtension()
+            .setQuantity(1));
+
+    // Order Contents
+    OrderContents contents = new OrderContents()
+        .setLineItems(Arrays.asList(firstItem, secondItem, thirdItem, fourthItem));
+
+    // User Info
+    UserInfo buyerInfo = new UserInfo()
+        .setEmail("janedoe@gmail.com")
+        .setFirstName("Jane")
+        .setLastName("Doe")
+        .setDisplayName("Jane Doe");
+
+    // Price Attributes
+    PriceAttribute subTotal = new PriceAttribute()
+        .setType("SUBTOTAL")
+        .setName("Subtotal")
+        .setState("ESTIMATE")
+        .setAmount(new MoneyV3()
+            .setCurrencyCode("USD")
+            .setAmountInMicros(32220000L)
+        )
+        .setTaxIncluded(true);
+
+    PriceAttribute deliveryFee = new PriceAttribute()
+        .setType("DELIVERY")
+        .setName("Delivery")
+        .setState("ACTUAL")
+        .setAmount(new MoneyV3()
+            .setCurrencyCode("USD")
+            .setAmountInMicros(2000000L)
+        )
+        .setTaxIncluded(true);
+
+    PriceAttribute tax = new PriceAttribute()
+        .setType("TAX")
+        .setName("Tax")
+        .setState("ESTIMATE")
+        .setAmount(new MoneyV3()
+            .setCurrencyCode("USD")
+            .setAmountInMicros(2780000L)
+        )
+        .setTaxIncluded(true);
+
+    PriceAttribute totalPrice = new PriceAttribute()
+        .setType("TOTAL")
+        .setName("Total Price")
+        .setState("ESTIMATE")
+        .setAmount(new MoneyV3()
+            .setCurrencyCode("USD")
+            .setAmountInMicros(37000000L)
+        )
+        .setTaxIncluded(true);
+
+    // Follow up actions
+    Action viewDetails = new Action()
+        .setType("VIEW_DETAILS")
+        .setTitle("View details")
+        .setOpenUrlAction(new OpenUrlAction()
+            .setUrl("https://example.com"));
+
+    Action call = new Action()
+        .setType("CALL")
+        .setTitle("Call us")
+        .setOpenUrlAction(new OpenUrlAction()
+            .setUrl("tel:+16501112222"));
+
+    Action email = new Action()
+        .setType("EMAIL")
+        .setTitle("Email us")
+        .setOpenUrlAction(new OpenUrlAction()
+            .setUrl("mailto:person@example.com"));
+
+    // Terms of service and order note
+    String termsOfServiceUrl = "https://example.com";
+    String orderNote = "The Memoir collection";
+
+    Location location = GSON_BUILDER.create().fromJson(
+        (String) conversationData.get("location"), Location.class);
+
+    // Purchase Order Extension
+    PurchaseOrderExtension purchaseOrderExtension = new PurchaseOrderExtension()
+        .setStatus("CREATED")
+        .setUserVisibleStatusLabel("CREATED")
+        .setType("RETAIL")
+        .setReturnsInfo(new PurchaseReturnsInfo()
+            .setIsReturnable(false)
+            .setDaysToReturn(1)
+            .setPolicyUrl("https://example.com"))
+        .setFulfillmentInfo(new PurchaseFulfillmentInfo()
+            .setId("FULFILLMENT_SERVICE_ID")
+            .setFulfillmentType("DELIVERY")
+            .setExpectedFulfillmentTime(new TimeV3()
+                .setTimeIso8601("2025-09-25T18:00:00.877Z"))
+            .setLocation(location)
+            .setPrice(new PriceAttribute()
+                .setType("REGULAR")
+                .setName("Delivery price")
+                .setState("ACTUAL")
+                .setAmount(new MoneyV3()
+                    .setCurrencyCode("USD")
+                    .setAmountInMicros(2000000L))
+                .setTaxIncluded(true))
+            .setFulfillmentContact(new UserInfo()
+                .setEmail("johnjohnson@gmail.com")
+                .setFirstName("John")
+                .setLastName("Johnson")
+                .setDisplayName("John Johnson")))
+        .setPurchaseLocationType("ONLINE_PURCHASE");
+
+    String now = Instant.now().toString();
+
+    OrderV3 order = new OrderV3()
+        .setCreateTime(now)
+        .setLastUpdateTime(now)
+        .setMerchantOrderId(orderId)
+        .setUserVisibleOrderId(orderId)
+        .setTransactionMerchant(transactionMerchant)
+        .setContents(contents)
+        .setBuyerInfo(buyerInfo)
+        .setPriceAttributes(Arrays.asList(
+            subTotal,
+            deliveryFee,
+            tax,
+            totalPrice
+        ))
+        .setFollowUpActions(Arrays.asList(
+            viewDetails,
+            call,
+            email
+        ))
+        .setTermsOfServiceUrl(termsOfServiceUrl)
+        .setNote(orderNote)
+        .setPurchase(purchaseOrderExtension);
+
+    // Create presentation options
+    PresentationOptionsV3 presentationOptions = new PresentationOptionsV3()
+        .setActionDisplayName("PLACE_ORDER");
+
+    // Create order options
+    OrderOptionsV3 orderOptions = new OrderOptionsV3()
+        .setUserInfoOptions(new UserInfoOptions()
+            .setUserInfoProperties(Collections.singletonList("EMAIL")));
+
+    // Create payment parameters
+    PaymentParameters paymentParameters = new PaymentParameters();
+    if (request.getContext("google_payment") != null) {
+
+      JSONObject merchantInfo = new JSONObject();
+      merchantInfo.put("merchantName", "Example Merchant");
+
+      JSONObject facilitationSpec = new JSONObject();
+      facilitationSpec.put("apiVersion", 2);
+      facilitationSpec.put("apiVersionMinor", 0);
+      facilitationSpec.put("merchantInfo", merchantInfo);
+
+      JSONObject allowedPaymentMethod = new JSONObject();
+      allowedPaymentMethod.put("type", "CARD");
+
+      JSONArray allowedAuthMethods = new JSONArray();
+      allowedAuthMethods.addAll(Arrays.asList("PAN_ONLY", "CRYPTOGRAM_3DS"));
+      JSONArray allowedCardNetworks = new JSONArray();
+      allowedCardNetworks.addAll(Arrays.asList("AMEX", "DISCOVER", "JCB", "MASTERCARD", "VISA"));
+
+      JSONObject allowedPaymentMethodParameters = new JSONObject();
+      allowedPaymentMethodParameters.put("allowedAuthMethods", allowedAuthMethods);
+      allowedPaymentMethodParameters.put("allowedCardNetworks", allowedCardNetworks);
+
+      allowedPaymentMethod.put("parameters", allowedPaymentMethodParameters);
+
+      JSONObject tokenizationSpecificationParameters = new JSONObject();
+      tokenizationSpecificationParameters.put("gateway", "example");
+      tokenizationSpecificationParameters.put("gatewayMerchantId", "exampleGatewayMerchantId");
+
+      JSONObject tokenizationSpecification = new JSONObject();
+      tokenizationSpecification.put("type", "PAYMENT_GATEWAY");
+      tokenizationSpecification.put("parameters", tokenizationSpecificationParameters);
+      allowedPaymentMethod.put("tokenizationSpecification", tokenizationSpecification);
+
+      JSONArray allowedPaymentMethods = new JSONArray();
+      allowedPaymentMethods.add(allowedPaymentMethod);
+
+      facilitationSpec.put("allowedPaymentMethods", allowedPaymentMethods);
+
+      JSONObject transactionInfo = new JSONObject();
+      transactionInfo.put("totalPriceStatus", "FINAL");
+      transactionInfo.put("totalPrice", "37.00");
+      transactionInfo.put("currencyCode", "USD");
+
+      facilitationSpec.put("transactionInfo", transactionInfo);
+
+      GooglePaymentOption googlePaymentOption = new GooglePaymentOption()
+          .setFacilitationSpec(facilitationSpec.toJSONString());
+      paymentParameters.setGooglePaymentOption(googlePaymentOption);
     } else {
-      // Google Pay provided payment gateway option
-      Map<String, String> parameters = new HashMap<>();
-      parameters.put("gateway", "braintree");
-      parameters.put("braintree:sdkVersion", "1.4.0");
-      parameters.put("braintree:apiVersion", "v1");
-      parameters.put("braintree:merchantId", "xxxxxxxxxxx");
-      parameters.put("braintree:clientKey", "sandbox_xxxxxxxxxxxxxxx");
-      parameters
-          .put("braintree:authorizationFingerprint", "sandbox_xxxxxxxxxxxxxxx");
-      PaymentMethodTokenizationParameters tokenizationParameters =
-          new PaymentMethodTokenizationParameters()
-              .setTokenizationType("PAYMENT_GATEWAY")
-              .setParameters(parameters);
-      orderOptions = new OrderOptions()
-          .setRequestDeliveryAddress(false);
-      GoogleProvidedPaymentOptions googleProvidedPaymentOptions =
-          new GoogleProvidedPaymentOptions().setPrepaidCardDisallowed(false)
-              .setSupportedCardNetworks(Arrays.asList("VISA", "AMEX"))
-              .setTokenizationParameters(tokenizationParameters);
-      paymentOptions = new PaymentOptions()
-          .setGoogleProvidedOptions(googleProvidedPaymentOptions);
+      MerchantPaymentMethod merchantPaymentMethod = new MerchantPaymentMethod()
+          .setPaymentMethodDisplayInfo(new PaymentMethodDisplayInfo()
+              .setPaymentMethodDisplayName("VISA **** 1234")
+              .setPaymentType("PAYMENT_CARD"))
+          .setPaymentMethodGroup("Payment method group")
+          .setPaymentMethodId("12345678")
+          .setPaymentMethodStatus(new PaymentMethodStatus()
+              .setStatus("STATUS_OK")
+              .setStatusMessage("Status message"));
+
+      MerchantPaymentOption merchantPaymentOption = new MerchantPaymentOption()
+          .setDefaultMerchantPaymentMethodId("12345678")
+          .setManagePaymentMethodUrl("https://example.com/managePayment")
+          .setMerchantPaymentMethod(Collections.singletonList(merchantPaymentMethod));
+
+      paymentParameters.setMerchantPaymentOption(merchantPaymentOption);
     }
 
-    // Add delivery address as an extension to order
-    Map<String, Object> extension = new HashMap<>();
-    extension.put("@type",
-        "type.googleapis.com/google.actions.v2.orders.GenericExtension");
-    PostalAddress postalAddress =
-        new Gson().fromJson(
-            (String) request.getConversationData().get("postalAddress"),
-            PostalAddress.class);
-    extension
-        .put("locations",
-            Collections.singletonList(new OrderLocation().setType("DELIVERY")
-                .setLocation(new Location().setPostalAddress(postalAddress))));
-    proposedOrder.setExtension(extension);
-
-    LOGGER.info("transaction_decision_merchant end");
     return getResponseBuilder(request)
-        .add("Placeholder for transaction decision text")
         .add(new TransactionDecision()
+            .setOrder(order)
             .setOrderOptions(orderOptions)
-            .setPaymentOptions(paymentOptions)
-            .setProposedOrder(proposedOrder))
+            .setPresentationOptions(presentationOptions)
+            .setPaymentParameters(paymentParameters)
+        )
         .build();
   }
 
-  // Verified the order has been accepted
-  @ForIntent("transaction_decision_complete")
+  // Check result of asking to perform transaction / place order
+  @ForIntent("Transaction Decision Complete")
   public ActionResponse transactionDecisionComplete(ActionRequest request) {
-    LOGGER.info("transaction_decision_complete start");
-    ResourceBundle rb = ResourceBundle
-        .getBundle("resources", request.getLocale());
+    ResourceBundle rb = ResourceBundle.getBundle("resources", request.getLocale());
 
     // Check transaction decision value
     Argument transactionDecisionValue = request
@@ -406,124 +644,38 @@ public class TransactionsApp extends DialogflowApp {
       extension = transactionDecisionValue.getExtension();
     }
 
-    String userDecision = null;
+    String transactionDecision = null;
     if (extension != null) {
-      userDecision = (String) extension.get("userDecision");
+      transactionDecision = (String) extension.get("transactionDecision");
     }
     ResponseBuilder responseBuilder = getResponseBuilder(request);
-    if ((userDecision != null && userDecision.equals("ORDER_ACCEPTED"))) {
-      // If the order is accepted, send an order update to create order
-      String finalOrderId = ((Order) extension.get("order")).getFinalOrder()
-          .getId();
-      LOGGER.info("Order accepted! finalOrderId: {}", finalOrderId);
+    if ((transactionDecision != null && transactionDecision.equals("ORDER_ACCEPTED"))) {
+      OrderV3 order = ((OrderV3) extension.get("order"));
+      order.setLastUpdateTime(Instant.now().toString());
 
-      OrderUpdate orderUpdate = new OrderUpdate().setActionOrderId(finalOrderId)
-          .setOrderState(new OrderState().setLabel("Order created").setState("CREATED"))
-          .setReceipt(new Receipt().setConfirmedActionOrderId(finalOrderId))
-          .setOrderManagementActions(
-              Collections.singletonList(new OrderUpdateAction()
-                  .setButton(new Button().setOpenUrlAction(new OpenUrlAction()
-                      .setUrl("http://example.com/customer-service"))
-                      .setTitle("Customer Service"))
-                  .setType("CUSTOMER_SERVICE")))
-          .setUserNotification(new OrderUpdateUserNotification()
-              .setText("Notification text.").setTitle("Notification Title"))
-          .setUpdateTime(Instant.now().toString());
+      // Update order status
+      PurchaseOrderExtension purchaseOrderExtension = order.getPurchase();
+      purchaseOrderExtension.setStatus("CONFIRMED");
+      purchaseOrderExtension.setUserVisibleStatusLabel("Order confirmed");
+      order.setPurchase(purchaseOrderExtension);
 
-      String response = MessageFormat.format(rb.getString("transaction_completed"), finalOrderId);
+      // Order update
+      OrderUpdateV3 orderUpdate = new OrderUpdateV3()
+          .setType("SNAPSHOT")
+          .setReason("Reason string")
+          .setOrder(order);
 
-      responseBuilder.add(response).add(new StructuredResponse().setOrderUpdate(orderUpdate));
-    } else if (userDecision != null && userDecision
-        .equals("DELIVERY_ADDRESS_UPDATED")) {
-      responseBuilder.add(new DeliveryAddress().setAddressOptions(
-          new DeliveryAddressValueSpecAddressOptions()
-              .setReason(rb.getString("reason"))));
+      Map<String, Object> conversationData = request.getConversationData();
+      String orderId = (String) conversationData.get("UNIQUE_ORDER_ID");
+      String response = MessageFormat.format(
+          rb.getString("transaction_decision_result_success"),
+          orderId);
+      responseBuilder
+          .add(response)
+          .add(new StructuredResponse().setOrderUpdateV3(orderUpdate));
     } else {
       responseBuilder.add(rb.getString("transaction_failed"));
     }
-    LOGGER.info("transaction_decision_complete end");
-    return responseBuilder.build();
-  }
-
-  /**
-   * Gets the a list of four {@link LineItem}s.
-   *
-   * @return an {@link List} of four {@link LineItem}s
-   */
-  private List<LineItem> getLineItems() {
-    // Create first line item
-    LineItemSubLine firstSubline = new LineItemSubLine()
-        .setNote("Note from the author");
-    LineItem firstItem = createLineItem("My Memoirs", "memoirs_1", 3, 99,
-        Collections.singletonList(firstSubline));
-
-    // Create second line item
-    LineItemSubLine secondSubline = new LineItemSubLine()
-        .setNote("Special introduction by author");
-    LineItem secondItem = createLineItem("Memoirs of a person", "memoirs_2", 5,
-        99,
-        Collections.singletonList(secondSubline));
-
-    // Third line item
-    LineItemSubLine thirdSubline = new LineItemSubLine().setLineItem(
-        new LineItem().setName("Special memoir epilogue")
-            .setId("memoirs_epilogue").setPrice(
-            new Price().setAmount(
-                new Money().setCurrencyCode("USD").setNanos(990000000)
-                    .setUnits(3L))
-        ).setType("REGULAR"));
-    LineItem thirdItem = createLineItem("Their memoirs", "memoirs_3", 15, 75,
-        Collections.singletonList(thirdSubline));
-
-    // Fourth line item
-    LineItemSubLine fourthSubline = new LineItemSubLine()
-        .setNote("Special introduction by author");
-    LineItem fourthItem = createLineItem("Our memoirs", "memoirs_4", 6, 49,
-        Collections.singletonList(fourthSubline));
-
-    return Arrays.asList(firstItem, secondItem, thirdItem, fourthItem);
-  }
-
-  /**
-   * Creates a {@link LineItem} given a name, id, price, and list of {@link
-   * LineItemSubLine}s.
-   *
-   * @return a newly created {@link LineItem}.
-   */
-  private LineItem createLineItem(String name, String id, int dollar, int cents,
-      List<LineItemSubLine> sublines) {
-    Money amount = new Money()
-        .setCurrencyCode("USD")
-        .setUnits((long) dollar)
-        .setNanos(cents * 10000000);
-    Price price = new Price().setAmount(amount).setType("ACTUAL");
-    return new LineItem().setName(name)
-        .setId(id)
-        .setPrice(price).setQuantity(1).setType("REGULAR")
-        .setSubLines(sublines);
-  }
-
-  /**
-   * Gets the a list of other {@link LineItem}s.
-   *
-   * @return an {@link List} of four {@link LineItem}s
-   */
-  private List<LineItem> getOtherItems() {
-    // Subtotal
-    Money subtotalAmount = new Money().setCurrencyCode("USD")
-        .setNanos(220000000).setUnits(32L);
-    Price subtotalPrice = new Price().setAmount(subtotalAmount)
-        .setType("ESTIMATE");
-    LineItem subtotalItem = new LineItem().setName("Subtotal").setId("subtotal")
-        .setPrice(subtotalPrice).setType("SUBTOTAL");
-
-    // Tax
-    Money taxAmount = new Money().setCurrencyCode("USD").setNanos(780000000)
-        .setUnits(2L);
-    Price taxPrice = new Price().setAmount(taxAmount).setType("ESTIMATE");
-    LineItem taxItem = new LineItem().setName("Tax").setId("tax")
-        .setPrice(taxPrice).setType("TAX");
-
-    return Arrays.asList(subtotalItem, taxItem);
+    return responseBuilder.endConversation().build();
   }
 }

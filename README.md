@@ -54,8 +54,8 @@ Return to the [Dialogflow Console](https://console.dialogflow.com), from the lef
     + role:  **Project/Owner**
     + key type: **JSON** > **Create**
     + Your private JSON file will be downloaded to your local machine
-1. Place the downloaded file in the 'src/main/resources/' and name `service-account.json`.
-1. In `TransactionsApp.java`, in the sendOrderUpdate() method > replace the `<finalOrderId>` placeholder string assigned to finalOrderId with the ID of the order you wish to update.
+1. Place the downloaded file in the 'src/main/resources/' and name it `service-account.json`.
+1. In `TransactionsApp.java`, in the main() method > replace the `<UNIQUE_ORDER_ID>` placeholder string assigned to uniqueOrderId with the ID of the order you wish to update.
 1. To send an order update, open a terminal and run the following command: `./gradlew sendOrderUpdate`.
    +  Or from within IntelliJ, open the Gradle tray and run the sendOrderUpdate task.
 1. If the order update succeeds, a `200 OK` response should be logged to the console.
