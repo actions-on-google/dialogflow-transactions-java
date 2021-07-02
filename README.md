@@ -9,6 +9,8 @@ This sample shows everything you need to facilitate transactions, including:
   + Examples of Google Pay and merchant-managed payment options
   + Order update Gradle task (sendOrderUpdate), to asynchronously update order status at any time
 
+:warning: This code sample was built using Dialogflow. We now recommend using [Actions Builder or the Actions SDK](https://developers.google.com/assistant/conversational/overview) to develop, test, and deploy Conversational Actions.
+
 ### Setup Instructions
 ### Prerequisites
 1. Download & install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/)
